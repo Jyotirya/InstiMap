@@ -29,7 +29,7 @@ import { buildingPath, buildingSlug, slugFromPathname } from "@/lib/building-url
 import { encodeDigipin } from "@/lib/digipin";
 import { foodPopup } from "@/lib/food-popup";
 import { applySheet } from "@/lib/sheet";
-import { MARKER_COLORS, MY_LOCATION_LABEL, findBuildingCentroid, formatRouteInfo, resolvePlace } from "@/lib/places";
+import { MARKER_COLORS, MY_LOCATION_LABEL, PLACE_NAMES, findPlaceCentroid, formatRouteInfo, resolvePlace } from "@/lib/places";
 import { haversineMeters } from "../../src/routing";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,9 +47,6 @@ import { BuildingCombobox } from "@/components/building-combobox";
 const ROUTE_SOURCE_ID = "demo-route";
 const ROUTE_LAYER_ID = "demo-route-line";
 
-const buildingNames = IITB_BUILDINGS.features
-  .map((f) => f.properties?.name)
-  .filter((name): name is string => !!name);
 const buildingGroups = groupBuildings(
   IITB_BUILDINGS.features.flatMap((f) => (f.properties?.name ? [{ name: f.properties.name, building: f.properties.building }] : [])),
 );
@@ -68,10 +65,10 @@ function applyShown(map: maplibregl.Map, shown: string[]) {
   setFoodLabelsVisible(map, shown.includes("food"));
 }
 
-// Opened via a /b/<slug>/ share page: that building is the destination.
-const sharedBuilding = (() => {
+// Opened via a /b/<slug>/ share page: that place is the destination.
+const sharedPlace = (() => {
   const slug = slugFromPathname(window.location.pathname);
-  return slug ? buildingNames.find((name) => buildingSlug(name) === slug) : undefined;
+  return slug ? PLACE_NAMES.find((name) => buildingSlug(name) === slug) : undefined;
 })();
 
 interface RouteState {
@@ -219,7 +216,7 @@ export default function App() {
   const [glyphsUrlDraft, setGlyphsUrlDraft] = React.useState(() => (import.meta.env.DEV ? "/fonts/{fontstack}/{range}.pbf" : ""));
 
   const [fromValue, setFromValue] = React.useState("");
-  const [toValue, setToValue] = React.useState(sharedBuilding ?? "");
+  const [toValue, setToValue] = React.useState(sharedPlace ?? "");
   const [myLocation, setMyLocation] = React.useState<[number, number] | null>(null);
   const [profile, setProfile] = React.useState<RoutingProfile>("walk");
   const [routeState, setRouteState] = React.useState<RouteState>({ routes: [], selectedIndex: 0 });
@@ -255,7 +252,7 @@ export default function App() {
   const shareUrl = () => {
     const worker = import.meta.env.VITE_SHARE_URL;
     if (routeState.routes.length === 0) {
-      return findBuildingCentroid(toValue) ? new URL(buildingPath(toValue.trim()), appBase).href : appBase.href;
+      return findPlaceCentroid(toValue) ? new URL(buildingPath(toValue.trim()), appBase).href : appBase.href;
     }
     const route = sharedRoute(routeState.selectedIndex);
     return (worker ? writeSharedRoute(new URL("r", worker), route) : routeLink(appBase, route)).href;
@@ -354,7 +351,7 @@ export default function App() {
       return;
     }
 
-    const sharedCentroid = sharedBuilding ? findBuildingCentroid(sharedBuilding) : undefined;
+    const sharedCentroid = sharedPlace ? findPlaceCentroid(sharedPlace) : undefined;
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style,
@@ -370,9 +367,11 @@ export default function App() {
       map.on("click", id, (e) => {
         const f = e.features?.[0];
         if (!f || f.geometry.type !== "Point") return;
+        const props = f.properties as FoodProps;
+        setToValue(props.name); // the Share button then copies its link
         new maplibregl.Popup({ maxWidth: "240px", focusAfterOpen: false })
           .setLngLat(f.geometry.coordinates as [number, number])
-          .setDOMContent(foodPopup(f.properties as FoodProps))
+          .setDOMContent(foodPopup(props))
           .addTo(map);
       });
       map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
@@ -536,7 +535,7 @@ export default function App() {
                 id="fromInput"
                 value={fromValue}
                 onValueChange={setFromValue}
-                buildingNames={buildingNames}
+                buildingNames={PLACE_NAMES}
                 placeholder="From (building, DIGIPIN, my location)"
                 className="flex-1"
               />
@@ -556,7 +555,7 @@ export default function App() {
               id="toInput"
               value={toValue}
               onValueChange={setToValue}
-              buildingNames={buildingNames}
+              buildingNames={PLACE_NAMES}
               placeholder={directions ? "To (building or DIGIPIN)" : "Search buildings"}
               className="flex-1"
             />

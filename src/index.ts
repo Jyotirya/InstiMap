@@ -32,6 +32,7 @@ export {
   FOOD_DOT_LAYER_ID,
   FOOD_LABEL_LAYER_ID,
   FOOD_COLORS,
+  FOOD_NAMES,
   type FoodProps,
   foodLayers,
   setFoodLabelsVisible,

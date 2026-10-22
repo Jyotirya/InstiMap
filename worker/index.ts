@@ -5,7 +5,7 @@ import inter400 from "../demo/og/fonts/inter-400.ttf";
 import inter700 from "../demo/og/fonts/inter-700.ttf";
 import { findRoutes, type Route } from "../src/index";
 import { buildingPath } from "../demo/src/lib/building-url";
-import { findBuilding, formatRouteInfo, resolvePlace, SITE_TITLE } from "../demo/src/lib/places";
+import { findPlace, formatRouteInfo, resolvePlace, SITE_TITLE } from "../demo/src/lib/places";
 import { readSharedRoute, routeLink, writeSharedRoute, type SharedRoute } from "../demo/src/lib/route-url";
 import { esc, loadBasemap, routeScene, sceneSvg, sceneView } from "../demo/og/render";
 import { shareMetaTags } from "../demo/og/meta";
@@ -31,7 +31,7 @@ function resolveRoute(shared: SharedRoute): Route | undefined {
 function sharePage(env: Env, url: URL, shared: SharedRoute): Response {
   const route = resolveRoute(shared);
   const target = routeLink(env.APP_URL, shared).href;
-  const dest = findBuilding(shared.to);
+  const dest = findPlace(shared.to);
   const { title, description, image } = route
     ? {
         title: `${shared.from} to ${shared.to} | ${SITE_TITLE}`,
@@ -69,7 +69,7 @@ async function routeImage(request: Request, url: URL, shared: SharedRoute, ctx: 
 
   const route = resolveRoute(shared);
   if (!route) return new Response("No route", { status: 404 });
-  const scene = routeScene(shared.from, shared.to, route, shared.profile, findBuilding(shared.to));
+  const scene = routeScene(shared.from, shared.to, route, shared.profile, findPlace(shared.to));
   const [basemap] = await Promise.all([loadBasemap(sceneView(scene).box), (wasmReady ??= initWasm(resvgWasm))]);
   const png = new Resvg(sceneSvg(basemap, scene), {
     font: { fontBuffers: FONTS, loadSystemFonts: false, defaultFontFamily: "Inter" },
