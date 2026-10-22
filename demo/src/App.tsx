@@ -9,7 +9,10 @@ import {
   MIN_ZOOM,
   MAX_ZOOM,
   setBuildingLabelsVisible,
+  setFoodLabelsVisible,
+  setBuildings3d,
   IITB_BUILDINGS,
+  storeysByName,
   findRoutes,
   inCampusBbox,
   type Route,
@@ -28,6 +31,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { BuildingList } from "@/components/building-list";
+import { groupBuildings } from "@/lib/building-groups";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { BuildingCombobox } from "@/components/building-combobox";
 
@@ -37,6 +42,11 @@ const ROUTE_LAYER_ID = "demo-route-line";
 const buildingNames = IITB_BUILDINGS.features
   .map((f) => f.properties?.name)
   .filter((name): name is string => !!name);
+const buildingGroups = groupBuildings(
+  IITB_BUILDINGS.features.flatMap((f) => (f.properties?.name ? [{ name: f.properties.name, building: f.properties.building }] : [])),
+);
+
+const buildingStoreys = storeysByName();
 
 // Opened via a /b/<slug>/ share page: that building is the destination.
 const sharedBuilding = (() => {
@@ -59,6 +69,30 @@ function setMarker(map: maplibregl.Map, marker: maplibregl.Marker | null, coords
     return marker;
   }
   return new maplibregl.Marker({ color }).setLngLat(coords).addTo(map);
+}
+
+type ThemePref = "system" | "light" | "dark";
+// key shared with the inline script in index.html
+const THEME_KEY = "iitbmap-theme";
+const DARK_QUERY = window.matchMedia("(prefers-color-scheme: dark)");
+
+function readThemePref(): ThemePref {
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    if (v === "light" || v === "dark") return v;
+  } catch {
+    // storage blocked: fall back to the system theme
+  }
+  return "system";
+}
+
+function writeThemePref(pref: ThemePref): void {
+  try {
+    if (pref === "system") localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, pref);
+  } catch {
+    // storage blocked: the choice lasts for this visit only
+  }
 }
 
 // map.setStyle() wipes custom sources/layers, so this is called from both the
@@ -142,8 +176,24 @@ export default function App() {
   const geolocateRef = React.useRef<maplibregl.GeolocateControl | null>(null);
   const lastRoutedFixRef = React.useRef<{ at: [number, number]; to: string } | null>(null);
 
-  const [dark, setDark] = React.useState(false);
+  const [themePref, setThemePref] = React.useState<ThemePref>(readThemePref);
+  const [systemDark, setSystemDark] = React.useState(() => DARK_QUERY.matches);
+  const dark = themePref === "system" ? systemDark : themePref === "dark";
+
+  React.useEffect(() => {
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    DARK_QUERY.addEventListener("change", onChange);
+    return () => DARK_QUERY.removeEventListener("change", onChange);
+  }, []);
+
+  React.useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    const map = mapRef.current;
+    if (map && styleReadyRef.current) setCampusTheme(map, dark);
+  }, [dark]);
   const [buildingNamesVisible, setBuildingNamesVisible] = React.useState(true);
+  const [foodVisible, setFoodVisible] = React.useState(true);
+  const [buildings3d, setBuildings3dOn] = React.useState(false);
   const [tileUrlDraft, setTileUrlDraft] = React.useState(() =>
     import.meta.env.DEV ? `${window.location.origin}/tiles/{z}/{x}/{y}.pbf` : "",
   );
@@ -239,8 +289,13 @@ export default function App() {
       (b, c) => b.extend(c as [number, number]),
       new maplibregl.LngLatBounds(allCoords[0], allCoords[0]),
     );
-    const panelRight = window.matchMedia(WIDE_SCREEN).matches ? (panelRef.current?.getBoundingClientRect().right ?? 0) : 0;
-    map.fitBounds(bounds, { padding: { top: FIT_PADDING, right: FIT_PADDING, bottom: FIT_PADDING, left: panelRight + FIT_PADDING } });
+    const wide = window.matchMedia(WIDE_SCREEN).matches;
+    const panelRight = wide ? (panelRef.current?.getBoundingClientRect().right ?? 0) : 0;
+    const listLeft = wide ? document.getElementById("building-list")?.getBoundingClientRect().left : undefined;
+    const listWidth = listLeft === undefined ? 0 : window.innerWidth - listLeft;
+    map.fitBounds(bounds, {
+      padding: { top: FIT_PADDING, right: listWidth + FIT_PADDING, bottom: FIT_PADDING, left: panelRight + FIT_PADDING },
+    });
   };
 
   // Two named entry points instead of one boolean-flag parameter: a fresh user-initiated
@@ -266,7 +321,7 @@ export default function App() {
 
   // Bridges into MapLibre's persistent `style.load` listener, which is registered once
   // and would otherwise only ever see the state from the render it was created in.
-  const latest = { fromValue, toValue, routeState, buildingNamesVisible, recomputeRoute };
+  const latest = { fromValue, toValue, routeState, buildingNamesVisible, foodVisible, buildings3d, recomputeRoute, dark };
   const latestRef = React.useRef(latest);
   latestRef.current = latest;
 
@@ -274,7 +329,7 @@ export default function App() {
     if (!mapContainerRef.current) return;
     let style;
     try {
-      style = getCampusStyle({ dark: false, tileUrl: tileUrlDraft || undefined, glyphsUrl: glyphsUrlDraft || undefined });
+      style = getCampusStyle({ dark, tileUrl: tileUrlDraft || undefined, glyphsUrl: glyphsUrlDraft || undefined });
     } catch (err) {
       setError(toErrorMessage(err));
       return;
@@ -290,6 +345,14 @@ export default function App() {
       maxZoom: MAX_ZOOM,
     });
     mapRef.current = map;
+    // narrow screens open compact attribution expanded over the map; collapse it after MapLibre's resize handler
+    const collapseAttribution = () => {
+      const attrib = map.getContainer().querySelector(".maplibregl-ctrl-attrib.maplibregl-compact");
+      attrib?.removeAttribute("open");
+      attrib?.classList.remove("maplibregl-compact-show");
+    };
+    map.once("load", collapseAttribution);
+    map.on("resize", collapseAttribution);
     if (sharedCentroid) toMarkerRef.current = setMarker(map, null, sharedCentroid, MARKER_COLORS.end);
 
     const geolocate = new maplibregl.GeolocateControl({
@@ -317,6 +380,9 @@ export default function App() {
       styleReadyRef.current = true;
       const current = latestRef.current;
       setBuildingLabelsVisible(map, current.buildingNamesVisible);
+      setFoodLabelsVisible(map, current.foodVisible);
+      setBuildings3d(map, current.buildings3d);
+      setCampusTheme(map, current.dark); // the theme may have changed while the style loaded
       if (current.fromValue.trim() && current.toValue.trim() && current.routeState.routes.length === 0) {
         current.recomputeRoute();
       } else if (current.routeState.routes.length > 0) {
@@ -529,19 +595,30 @@ export default function App() {
           {settingsOpen && (
             <>
               <Separator />
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="dark"
-                  checked={dark}
-                  onCheckedChange={(v) => {
-                    const next = v === true;
-                    setDark(next);
-                    document.documentElement.classList.toggle("dark", next);
-                    const map = mapRef.current;
-                    if (map && styleReadyRef.current) setCampusTheme(map, next);
+              <div className="flex flex-col gap-1">
+                <Label id="theme-label" className="text-xs text-muted-foreground">
+                  Theme
+                </Label>
+                <ToggleGroup
+                  type="single"
+                  aria-labelledby="theme-label"
+                  value={themePref}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    setThemePref(v as ThemePref);
+                    writeThemePref(v as ThemePref);
                   }}
-                />
-                <Label htmlFor="dark">Dark mode</Label>
+                >
+                  <ToggleGroupItem value="system" className="flex-1">
+                    System
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="light" className="flex-1">
+                    Light
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="dark" className="flex-1">
+                    Dark
+                  </ToggleGroupItem>
+                </ToggleGroup>
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -556,6 +633,34 @@ export default function App() {
                 />
                 <Label htmlFor="buildingNames">Building names</Label>
               </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="foodPlaces"
+                  checked={foodVisible}
+                  onCheckedChange={(v) => {
+                    const next = v === true;
+                    setFoodVisible(next);
+                    const map = mapRef.current;
+                    if (map && styleReadyRef.current) setFoodLabelsVisible(map, next);
+                  }}
+                />
+                <Label htmlFor="foodPlaces">Food places</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="buildings3d"
+                  checked={buildings3d}
+                  onCheckedChange={(v) => {
+                    const next = v === true;
+                    setBuildings3dOn(next);
+                    const map = mapRef.current;
+                    if (!map || !styleReadyRef.current) return;
+                    setBuildings3d(map, next);
+                    map.easeTo(next ? { pitch: 55 } : { pitch: 0, bearing: 0 });
+                  }}
+                />
+                <Label htmlFor="buildings3d">3D buildings</Label>
+              </div>
               <LabeledInput id="tileUrl" label="Tile URL template" value={tileUrlDraft} onChange={setTileUrlDraft} />
               <LabeledInput id="glyphsUrl" label="Glyphs URL template" value={glyphsUrlDraft} onChange={setGlyphsUrlDraft} />
               <Button onClick={applyStyleOverrides}>Apply</Button>
@@ -563,6 +668,7 @@ export default function App() {
           )}
         </CardContent>
       </Card>
+      <BuildingList groups={buildingGroups} storeys={buildingStoreys} selected={toValue.trim()} dark={dark} wideQuery={WIDE_SCREEN} onPick={setToValue} />
       <div id="map" ref={mapContainerRef} />
     </>
   );

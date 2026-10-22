@@ -5,6 +5,10 @@ export {
   getCampusStyle,
   mergeCampusLayers,
   setCampusTheme,
+  BUILDINGS_3D_LAYER_ID,
+  STOREY_M,
+  buildings3dLayer,
+  setBuildings3d,
   type CampusStyleOptions,
   type MergeCampusLayersOptions,
 } from "./style";
@@ -18,6 +22,17 @@ export {
   buildingLabelLayer,
   setBuildingLabelsVisible,
   buildingCentroid,
+  storeysByName,
 } from "./buildings";
+
+export {
+  IITB_FOOD,
+  FOOD_SOURCE_ID,
+  FOOD_DOT_LAYER_ID,
+  FOOD_LABEL_LAYER_ID,
+  FOOD_COLORS,
+  foodLayers,
+  setFoodLabelsVisible,
+} from "./food";
 
 export { findRoute, findRoutes, type RoutingProfile, type Route } from "./routing";

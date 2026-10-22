@@ -10,8 +10,8 @@ export const CAMPUS_BBOX = { latMin: 19.115, latMax: 19.157, lngMin: 72.903, lng
 export const MIN_ZOOM = 13;
 export const MAX_ZOOM = 19;
 
-export const MAP_BG = "#f5f5f3";
-export const MAP_BG_DARK = "#14171a";
+export const MAP_BG = "#e4e9dc";
+export const MAP_BG_DARK = "#1e2620";
 
 export function inCampusBbox(lat: number, lng: number): boolean {
   return (

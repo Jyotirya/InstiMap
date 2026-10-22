@@ -1,13 +1,16 @@
 import type {
   ExpressionSpecification,
+  FillExtrusionLayerSpecification,
   FillLayerSpecification,
+  LayerSpecification,
   LineLayerSpecification,
   Map as MaplibreMap,
   StyleSpecification,
 } from "maplibre-gl";
 import { CAMPUS_BBOX, MAP_BG, MAP_BG_DARK, MAX_ZOOM, MIN_ZOOM } from "./geo";
-import { BUILDING_LABEL_LAYER_ID, buildingLabelLayer, BUILDINGS_SOURCE_ID, IITB_BUILDINGS } from "./buildings";
+import { buildingLabelLayer, BUILDINGS_SOURCE_ID, IITB_BUILDINGS } from "./buildings";
 import { DEFAULT_GLYPHS_URL, DEFAULT_TILE_URL } from "./config";
+import { FOOD_SOURCE_ID, foodLayers, IITB_FOOD } from "./food";
 
 export const CAMPUS_SOURCE_ID = "campus";
 
@@ -17,9 +20,31 @@ export const ATTRIBUTION =
 
 /** Campus layer colors; also used by link previews. */
 export const PALETTE = {
-  light: { green: "#7cb069", parking: "#a8a29e", building: "#57534e", water: "#5b9bd5", line: "#44403c" },
-  dark: { green: "#7fb85f", parking: "#7d8291", building: "#c4b9ac", water: "#6cb4e8", line: "#d6d3d1" },
+  light: {
+    green: "#c7dcb4", parking: "#d5dccf", water: "#a9cfe0", line: "#ffffff", mainRoad: "#f3d38a", path: "#a39e90",
+    building: "#b9b3a6", academic: "#c98a5e", hostel: "#7d8fbf", residence: "#c9c2b2",
+  },
+  dark: {
+    green: "#263a29", parking: "#2a332c", water: "#1d3b4c", line: "#3a443c", mainRoad: "#8c6f34", path: "#5c655c",
+    building: "#45433d", academic: "#b07450", hostel: "#5e6fa0", residence: "#4a4a42",
+  },
 } as const;
+
+/** OSM building values per color group; anything else is "building". */
+export const BUILDING_KINDS = {
+  hostel: ["dormitory"],
+  academic: ["university", "college", "school", "civic", "hospital"],
+  residence: ["apartments", "residential", "bungalow", "house"],
+} as const;
+
+export type BuildingKind = keyof typeof BUILDING_KINDS | "building";
+export function buildingKind(tag: unknown): BuildingKind {
+  for (const [kind, tags] of Object.entries(BUILDING_KINDS)) if ((tags as readonly unknown[]).includes(tag)) return kind as BuildingKind;
+  return "building";
+}
+
+export const MAIN_ROADS = ["motorway", "trunk", "primary", "primary_link", "secondary", "tertiary"];
+export const PATHS = ["footway", "path", "steps", "track", "cycleway", "pedestrian"];
 
 /** Relative street width by OSM highway tag; also used by link previews. */
 export const STREET_WEIGHTS: Record<string, number> = {
@@ -27,7 +52,7 @@ export const STREET_WEIGHTS: Record<string, number> = {
   residential: 3, service: 2, unclassified: 2, pedestrian: 2, footway: 1,
 };
 export const DEFAULT_STREET_WEIGHT = 1.5;
-export const BUILDING_OPACITY = 0.9;
+export const BUILDING_OPACITY = 0.95;
 
 // MapLibre's tuple type can't express a spread of label/value pairs, hence the unknown cast.
 const STREET_WEIGHT = [
@@ -48,6 +73,16 @@ const zoomWidth = (weight: ExpressionSpecification, baseAtMinZoom: number): Expr
   MAX_ZOOM, ["*", baseAtMinZoom * 4, weight],
 ];
 
+function buildingColor(c: Record<"hostel" | "academic" | "residence" | "building", string>): ExpressionSpecification {
+  return [
+    "match", ["get", "building"],
+    [...BUILDING_KINDS.hostel], c.hostel,
+    [...BUILDING_KINDS.academic], c.academic,
+    [...BUILDING_KINDS.residence], c.residence,
+    c.building,
+  ];
+}
+
 export function campusLayers(dark = false): (FillLayerSpecification | LineLayerSpecification)[] {
   const c = dark ? PALETTE.dark : PALETTE.light;
   return [
@@ -61,11 +96,25 @@ export function campusLayers(dark = false): (FillLayerSpecification | LineLayerS
     },
     {
       id: "campus-streets", type: "line", source: CAMPUS_SOURCE_ID, "source-layer": "streets",
-      paint: { "line-color": c.line, "line-width": zoomWidth(STREET_WEIGHT, 0.3) },
+      filter: ["!", ["in", ["get", "highway"], ["literal", PATHS]]],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": ["case", ["in", ["get", "highway"], ["literal", MAIN_ROADS]], c.mainRoad, c.line],
+        "line-width": zoomWidth(STREET_WEIGHT, 0.45),
+      },
+    },
+    {
+      id: "campus-paths", type: "line", source: CAMPUS_SOURCE_ID, "source-layer": "streets",
+      filter: ["in", ["get", "highway"], ["literal", PATHS]],
+      paint: { "line-color": c.path, "line-width": zoomWidth(STREET_WEIGHT, 0.3), "line-dasharray": [2, 2] },
     },
     {
       id: "campus-building", type: "fill", source: CAMPUS_SOURCE_ID, "source-layer": "building",
-      paint: { "fill-color": c.building, "fill-outline-color": c.line, "fill-opacity": BUILDING_OPACITY },
+      paint: {
+        "fill-color": buildingColor(c),
+        "fill-outline-color": c.line,
+        "fill-opacity": BUILDING_OPACITY,
+      },
     },
     {
       id: "campus-water", type: "fill", source: CAMPUS_SOURCE_ID, "source-layer": "water",
@@ -76,6 +125,31 @@ export function campusLayers(dark = false): (FillLayerSpecification | LineLayerS
       paint: { "line-color": c.water, "line-width": zoomWidth(WATERWAY_WEIGHT, 0.15) },
     },
   ];
+}
+
+export const BUILDINGS_3D_LAYER_ID = "buildings-3d";
+/** One storey, in metres. */
+export const STOREY_M = 3.2;
+
+/** Named buildings with a known storey count, extruded; hidden until setBuildings3d. */
+export function buildings3dLayer(dark = false): FillExtrusionLayerSpecification {
+  const c = dark ? PALETTE.dark : PALETTE.light;
+  return {
+    id: BUILDINGS_3D_LAYER_ID, type: "fill-extrusion", source: BUILDINGS_SOURCE_ID,
+    filter: ["has", "levels"],
+    layout: { visibility: "none" },
+    paint: {
+      "fill-extrusion-color": buildingColor(c),
+      // ponytail: a "3+ storeys" minimum is drawn at 3; the housing listings give no more
+      "fill-extrusion-height": ["*", ["get", "levels"], STOREY_M],
+      "fill-extrusion-opacity": 0.9,
+    },
+  };
+}
+
+/** Visibility only; the caller tilts the camera, so a style reload leaves it alone. */
+export function setBuildings3d(map: MaplibreMap, on: boolean): void {
+  if (map.getLayer(BUILDINGS_3D_LAYER_ID)) map.setLayoutProperty(BUILDINGS_3D_LAYER_ID, "visibility", on ? "visible" : "none");
 }
 
 function resolveUrl(name: string, passed: string | undefined, fallback: string): string {
@@ -95,6 +169,18 @@ export interface CampusStyleOptions {
   glyphsUrl?: string;
 }
 
+/** Every layer of the full style, bottom to top; setCampusTheme re-paints this list. */
+function themedLayers(dark: boolean): LayerSpecification[] {
+  return [
+    { id: "bg", type: "background", paint: { "background-color": dark ? MAP_BG_DARK : MAP_BG } },
+    ...campusLayers(dark),
+    buildings3dLayer(dark),
+    buildingLabelLayer({ dark }),
+    // above building labels, so food names win label collisions
+    ...foodLayers({ dark }),
+  ];
+}
+
 export function getCampusStyle(opts: CampusStyleOptions = {}): StyleSpecification {
   const dark = opts.dark ?? false;
   return {
@@ -110,12 +196,9 @@ export function getCampusStyle(opts: CampusStyleOptions = {}): StyleSpecificatio
         attribution: ATTRIBUTION,
       },
       [BUILDINGS_SOURCE_ID]: { type: "geojson", data: IITB_BUILDINGS },
+      [FOOD_SOURCE_ID]: { type: "geojson", data: IITB_FOOD },
     },
-    layers: [
-      { id: "bg", type: "background", paint: { "background-color": dark ? MAP_BG_DARK : MAP_BG } },
-      ...campusLayers(dark),
-      buildingLabelLayer({ dark }),
-    ],
+    layers: themedLayers(dark),
   };
 }
 
@@ -157,17 +240,8 @@ export function mergeCampusLayers(style: StyleSpecification, opts: MergeCampusLa
 }
 
 export function setCampusTheme(map: MaplibreMap, dark: boolean): void {
-  if (map.getLayer("bg")) map.setPaintProperty("bg", "background-color", dark ? MAP_BG_DARK : MAP_BG);
-  for (const layer of campusLayers(dark)) {
-    if (!map.getLayer(layer.id)) continue;
-    for (const [prop, value] of Object.entries(layer.paint ?? {})) {
-      map.setPaintProperty(layer.id, prop, value);
-    }
-  }
-  if (map.getLayer(BUILDING_LABEL_LAYER_ID)) {
-    const { paint } = buildingLabelLayer({ dark });
-    for (const [prop, value] of Object.entries(paint ?? {})) {
-      map.setPaintProperty(BUILDING_LABEL_LAYER_ID, prop, value);
-    }
+  for (const layer of themedLayers(dark)) {
+    if (!map.getLayer(layer.id) || !("paint" in layer)) continue;
+    for (const [prop, value] of Object.entries(layer.paint ?? {})) map.setPaintProperty(layer.id, prop, value);
   }
 }

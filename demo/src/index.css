@@ -3,51 +3,55 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.546 0.215 262.2);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.94 0.03 262.2);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.9 0 0);
-  --input: oklch(0.9 0 0);
-  --ring: oklch(0.546 0.215 262.2);
-  --radius: 0.65rem;
+  /* sage neutrals biased toward the campus greens; ink as primary, brick for focus */
+  --background: #fbfcf8;
+  --foreground: #1d2620;
+  --card: #fbfcf8;
+  --card-foreground: #1d2620;
+  --popover: #fbfcf8;
+  --popover-foreground: #1d2620;
+  --primary: #1d2620;
+  --primary-foreground: #fbfcf8;
+  --secondary: #eef1ea;
+  --secondary-foreground: #1d2620;
+  --muted: #eef1ea;
+  --muted-foreground: #5d6b61;
+  --accent: #e4e9dc;
+  --accent-foreground: #1d2620;
+  --destructive: #c2412b;
+  --destructive-foreground: #fbfcf8;
+  --border: #d5dccf;
+  --input: #d5dccf;
+  --ring: #d6452b;
+  --radius: 0.6rem;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.65 0.19 262.2);
-  --primary-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.3 0.06 262.2);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.145 0 0);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 18%);
-  --ring: oklch(0.65 0.19 262.2);
+  --background: #141a16;
+  --foreground: #e3e9e0;
+  --card: #1b221d;
+  --card-foreground: #e3e9e0;
+  --popover: #1b221d;
+  --popover-foreground: #e3e9e0;
+  --primary: #e3e9e0;
+  --primary-foreground: #141a16;
+  --secondary: #242d26;
+  --secondary-foreground: #e3e9e0;
+  --muted: #242d26;
+  --muted-foreground: #94a397;
+  --accent: #263a29;
+  --accent-foreground: #e3e9e0;
+  --destructive: #ff7a5c;
+  --destructive-foreground: #141a16;
+  --border: #2e3831;
+  --input: #2e3831;
+  --ring: #ff7a5c;
 }
 
 @theme inline {
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -129,4 +133,21 @@ body,
 }
 [data-slot="collapsible-content"][data-state="closed"] {
   animation: collapsible-up 150ms ease-out;
+}
+
+/* MapLibre's built-in controls ship light-only */
+.dark .maplibregl-ctrl-group,
+.dark .maplibregl-ctrl-attrib {
+  background: var(--card);
+  color: var(--muted-foreground);
+}
+.dark .maplibregl-ctrl-attrib a {
+  color: var(--foreground);
+}
+.dark .maplibregl-ctrl-group button + button {
+  border-top-color: var(--border);
+}
+.dark .maplibregl-ctrl button .maplibregl-ctrl-icon,
+.dark .maplibregl-ctrl-attrib-button {
+  filter: invert(1);
 }

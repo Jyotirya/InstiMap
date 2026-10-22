@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { campusLayers, getCampusStyle, mergeCampusLayers } from "../src/style";
+import { BUILDINGS_3D_LAYER_ID, buildings3dLayer, campusLayers, getCampusStyle, mergeCampusLayers, STOREY_M } from "../src/style";
 
 describe("campusLayers", () => {
   it("defines one layer per campus source-layer, bottom to top", () => {
@@ -7,6 +7,7 @@ describe("campusLayers", () => {
       "campus-green",
       "campus-parking",
       "campus-streets",
+      "campus-paths",
       "campus-building",
       "campus-water",
       "campus-waterway",
@@ -27,18 +28,27 @@ describe("campusLayers", () => {
     }
   });
 
-  it("building and streets invert (dark-on-light <-> light-on-dark) rather than just dimming", () => {
-    const paintOf = (dark: boolean, id: string, prop: string): string => {
-      const layer = campusLayers(dark).find((l) => l.id === id)!;
-      return (layer.paint as Record<string, unknown> | undefined)?.[prop] as string;
-    };
+  it("colors buildings by type, with distinct academic / hostel / residence fills", () => {
+    for (const dark of [false, true]) {
+      const fill = (campusLayers(dark).find((l) => l.id === "campus-building")!.paint as Record<string, unknown>)[
+        "fill-color"
+      ] as unknown[];
+      expect(fill[0]).toBe("match");
+      const colors = [fill[3], fill[5], fill[7], fill[8]];
+      expect(new Set(colors).size).toBe(4);
+    }
+  });
 
-    expect(hexLightness(paintOf(false, "campus-building", "fill-color"))).toBeLessThan(
-      hexLightness(paintOf(true, "campus-building", "fill-color")),
-    );
-    expect(hexLightness(paintOf(false, "campus-streets", "line-color"))).toBeLessThan(
-      hexLightness(paintOf(true, "campus-streets", "line-color")),
-    );
+  it("splits streets and footpaths into separate layers, only footpaths dashed", () => {
+    const byId = Object.fromEntries(campusLayers().map((l) => [l.id, l]));
+    expect((byId["campus-paths"].paint as Record<string, unknown>)["line-dasharray"]).toBeDefined();
+    expect((byId["campus-streets"].paint as Record<string, unknown>)["line-dasharray"]).toBeUndefined();
+  });
+
+  it("dark streets are darker than light streets (no glare at night)", () => {
+    const lineOf = (dark: boolean) =>
+      ((campusLayers(dark).find((l) => l.id === "campus-streets")!.paint as Record<string, unknown>)["line-color"] as unknown[])[3] as string;
+    expect(hexLightness(lineOf(true))).toBeLessThan(hexLightness(lineOf(false)));
   });
 });
 
@@ -89,5 +99,16 @@ describe("mergeCampusLayers", () => {
   it("throws if the target style already has a source with the same id", () => {
     const base = { version: 8 as const, sources: { campus: { type: "vector" as const, tiles: [] } }, layers: [] };
     expect(() => mergeCampusLayers(base, baseUrl)).toThrow(/already has a source/);
+  });
+});
+
+describe("buildings3dLayer", () => {
+  it("extrudes only buildings with a storey count, hidden until switched on, below the labels", () => {
+    const layer = buildings3dLayer();
+    expect(layer.filter).toEqual(["has", "levels"]);
+    expect(layer.layout?.visibility).toBe("none");
+    expect(layer.paint?.["fill-extrusion-height"]).toEqual(["*", ["get", "levels"], STOREY_M]);
+    const ids = getCampusStyle({ tileUrl: "t", glyphsUrl: "g" }).layers.map((l) => l.id);
+    expect(ids.indexOf(BUILDINGS_3D_LAYER_ID)).toBeLessThan(ids.indexOf("building-label"));
   });
 });

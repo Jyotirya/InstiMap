@@ -4,7 +4,7 @@ import { PbfReader } from "pbf";
 import type { Feature, Polygon, Position } from "geojson";
 import { buildingCentroid, CAMPUS_BBOX, MAP_BG, type Route, type RoutingProfile } from "../../src/index";
 import { DEFAULT_TILE_URL } from "../../src/config";
-import { BUILDING_OPACITY, DEFAULT_STREET_WEIGHT, PALETTE, STREET_WEIGHTS } from "../../src/style";
+import { BUILDING_OPACITY, buildingKind, DEFAULT_STREET_WEIGHT, MAIN_ROADS, PALETTE, PATHS, STREET_WEIGHTS } from "../../src/style";
 import { formatRouteInfo, MARKER_COLORS } from "../src/lib/places";
 
 export const W = 1200;
@@ -35,7 +35,10 @@ const ringsToPath = (rings: Pt[][], close: boolean) =>
   rings.map((r) => "M" + r.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join("L") + (close ? "Z" : "")).join("");
 export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-export interface Basemap { fills: Record<string, string>; streets: { d: string; w: number }[]; waterways: string }
+export interface Basemap { fills: Record<string, string>; streets: { d: string; w: number; color: string; dashed: boolean }[]; waterways: string }
+
+const emptyFills = () => ({ green: "", parking: "", building: "", academic: "", hostel: "", residence: "", water: "" });
+const BUILDING_FILLS = ["building", "academic", "hostel", "residence"] as const;
 
 // decoded tiles, cached per process or isolate
 const tileCache = new Map<string, Promise<Basemap | null>>();
@@ -52,14 +55,21 @@ function loadTile(tx: number, ty: number, onMissing: (url: string) => void): Pro
         return null;
       }
       const decoded = new VectorTile(new PbfReader(new Uint8Array(await res.arrayBuffer())));
-      const out: Basemap = { fills: { green: "", parking: "", building: "", water: "" }, streets: [], waterways: "" };
+      const out: Basemap = { fills: emptyFills(), streets: [], waterways: "" };
       for (const [name, layer] of Object.entries(decoded.layers)) {
         const scale = 256 / layer.extent;
         for (let i = 0; i < layer.length; i++) {
           const f = layer.feature(i);
           const rings = f.loadGeometry().map((ring) => ring.map((p): Pt => [tx * 256 + p.x * scale - ORIGIN.x, ty * 256 + p.y * scale - ORIGIN.y]));
-          if (name in out.fills) out.fills[name] += ringsToPath(rings, true);
-          else if (name === "streets") out.streets.push({ d: ringsToPath(rings, false), w: STREET_WEIGHTS[String(f.properties.highway)] ?? DEFAULT_STREET_WEIGHT });
+          const hw = String(f.properties.highway);
+          if (name === "building") out.fills[buildingKind(f.properties.building)] += ringsToPath(rings, true);
+          else if (name in out.fills) out.fills[name] += ringsToPath(rings, true);
+          else if (name === "streets") out.streets.push({
+            d: ringsToPath(rings, false),
+            w: STREET_WEIGHTS[hw] ?? DEFAULT_STREET_WEIGHT,
+            color: PATHS.includes(hw) ? COLORS.path : MAIN_ROADS.includes(hw) ? COLORS.mainRoad : COLORS.line,
+            dashed: PATHS.includes(hw),
+          });
           else if (name === "waterway") out.waterways += ringsToPath(rings, false);
         }
       }
@@ -76,7 +86,7 @@ export async function loadBasemap(box: Box, onMissing: (url: string) => void = (
   for (let tx = t(box.x0 + ORIGIN.x); tx <= t(box.x1 + ORIGIN.x); tx++) {
     for (let ty = t(box.y0 + ORIGIN.y); ty <= t(box.y1 + ORIGIN.y); ty++) jobs.push(loadTile(tx, ty, onMissing));
   }
-  const merged: Basemap = { fills: { green: "", parking: "", building: "", water: "" }, streets: [], waterways: "" };
+  const merged: Basemap = { fills: emptyFills(), streets: [], waterways: "" };
   for (const tile of await Promise.all(jobs)) {
     if (!tile) continue;
     for (const k of Object.keys(merged.fills)) merged.fills[k] += tile.fills[k];
@@ -148,8 +158,8 @@ export function sceneSvg(basemap: Basemap, scene: Scene): string {
 <g transform="scale(${k}) translate(${(-box.x0).toFixed(2)} ${(-box.y0).toFixed(2)})">
   <path d="${basemap.fills.green}" fill="${COLORS.green}"/>
   <path d="${basemap.fills.parking}" fill="${COLORS.parking}"/>
-  ${basemap.streets.map((s) => `<path d="${s.d}" fill="none" stroke="${COLORS.line}" stroke-linecap="round" stroke-width="${px(s.w * 1.4)}"/>`).join("")}
-  <path d="${basemap.fills.building}" fill="${COLORS.building}" fill-opacity="${BUILDING_OPACITY}"/>
+  ${basemap.streets.map((s) => `<path d="${s.d}" fill="none" stroke="${s.color}" stroke-linecap="round" stroke-width="${px(s.dashed ? s.w : s.w * 1.4)}"${s.dashed ? ` stroke-dasharray="${px(6)} ${px(6)}"` : ""}/>`).join("")}
+  ${BUILDING_FILLS.map((k) => `<path d="${basemap.fills[k]}" fill="${COLORS[k]}" fill-opacity="${BUILDING_OPACITY}"/>`).join("")}
   <path d="${basemap.fills.water}" fill="${COLORS.water}"/>
   <path d="${basemap.waterways}" fill="none" stroke="${COLORS.water}" stroke-width="${px(3)}"/>
   ${scene.highlight ? `<path d="${ringsToPath([scene.highlight], true)}" fill="${COLORS.end}" stroke="#fff" stroke-width="${px(3)}" stroke-linejoin="round"/>` : ""}
