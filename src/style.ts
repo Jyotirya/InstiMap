@@ -8,7 +8,7 @@ import type {
   StyleSpecification,
 } from "maplibre-gl";
 import { CAMPUS_BBOX, MAP_BG, MAP_BG_DARK, MAX_ZOOM, MIN_ZOOM } from "./geo";
-import { buildingLabelLayer, BUILDINGS_SOURCE_ID, IITB_BUILDINGS } from "./buildings";
+import { BUILDING_LABEL_FILTER, BUILDING_LABEL_LAYER_ID, buildingLabelLayer, BUILDINGS_SOURCE_ID, IITB_BUILDINGS } from "./buildings";
 import { DEFAULT_GLYPHS_URL, DEFAULT_TILE_URL } from "./config";
 import { FOOD_SOURCE_ID, foodLayers, IITB_FOOD } from "./food";
 
@@ -131,12 +131,14 @@ export const BUILDINGS_3D_LAYER_ID = "buildings-3d";
 /** One storey, in metres. */
 export const STOREY_M = 3.2;
 
+const BUILDINGS_3D_FILTER: ExpressionSpecification = ["has", "levels"];
+
 /** Named buildings with a known storey count, extruded; hidden until setBuildings3d. */
 export function buildings3dLayer(dark = false): FillExtrusionLayerSpecification {
   const c = dark ? PALETTE.dark : PALETTE.light;
   return {
     id: BUILDINGS_3D_LAYER_ID, type: "fill-extrusion", source: BUILDINGS_SOURCE_ID,
-    filter: ["has", "levels"],
+    filter: BUILDINGS_3D_FILTER,
     layout: { visibility: "none" },
     paint: {
       "fill-extrusion-color": buildingColor(c),
@@ -150,6 +152,14 @@ export function buildings3dLayer(dark = false): FillExtrusionLayerSpecification 
 /** Visibility only; the caller tilts the camera, so a style reload leaves it alone. */
 export function setBuildings3d(map: MaplibreMap, on: boolean): void {
   if (map.getLayer(BUILDINGS_3D_LAYER_ID)) map.setLayoutProperty(BUILDINGS_3D_LAYER_ID, "visibility", on ? "visible" : "none");
+}
+
+/** Label and extrude only these building names; null shows all. */
+export function filterBuildings(map: MaplibreMap, names: string[] | null): void {
+  const only: ExpressionSpecification | null = names && ["in", ["get", "name"], ["literal", names]];
+  for (const [id, base] of [[BUILDING_LABEL_LAYER_ID, BUILDING_LABEL_FILTER], [BUILDINGS_3D_LAYER_ID, BUILDINGS_3D_FILTER]] as const) {
+    if (map.getLayer(id)) map.setFilter(id, only ? ["all", base, only] : base);
+  }
 }
 
 function resolveUrl(name: string, passed: string | undefined, fallback: string): string {

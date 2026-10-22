@@ -1,4 +1,4 @@
-import type { Map as MaplibreMap, SymbolLayerSpecification } from "maplibre-gl";
+import type { ExpressionSpecification, Map as MaplibreMap, SymbolLayerSpecification } from "maplibre-gl";
 import type { Feature, FeatureCollection, Polygon } from "geojson";
 import buildings from "./iitb-buildings.json";
 import { MAP_BG, MAP_BG_DARK, MIN_ZOOM } from "./geo";
@@ -26,6 +26,9 @@ export const BUILDING_LABEL_LAYER_ID = "building-label";
 const LABEL_COLOR = { light: "#1d2620", dark: "#e3e9e0" } as const;
 const LABEL_HALO = { light: MAP_BG, dark: MAP_BG_DARK } as const;
 
+// a canteen or mess building is labelled by the food layer instead
+export const BUILDING_LABEL_FILTER: ExpressionSpecification = ["!", ["in", ["get", "name"], ["literal", FOOD_NAMES]]];
+
 /** Requires a configured glyph URL because the basemap supplies none. */
 export function buildingLabelLayer(opts: { dark?: boolean } = {}): SymbolLayerSpecification {
   const theme = opts.dark ? "dark" : "light";
@@ -34,8 +37,7 @@ export function buildingLabelLayer(opts: { dark?: boolean } = {}): SymbolLayerSp
     type: "symbol",
     source: BUILDINGS_SOURCE_ID,
     minzoom: MIN_ZOOM,
-    // a canteen or mess building is labelled by the food layer instead
-    filter: ["!", ["in", ["get", "name"], ["literal", FOOD_NAMES]]],
+    filter: BUILDING_LABEL_FILTER,
     layout: {
       "text-field": [
         "step", ["zoom"], ["get", "name"],

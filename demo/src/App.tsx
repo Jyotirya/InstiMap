@@ -8,10 +8,16 @@ import {
   CAMPUS_CENTER,
   MIN_ZOOM,
   MAX_ZOOM,
-  setBuildingLabelsVisible,
+  filterBuildings,
   setFoodLabelsVisible,
+  FOOD_DOT_LAYER_ID,
+  FOOD_LABEL_LAYER_ID,
+  type FoodProps,
   setBuildings3d,
   IITB_BUILDINGS,
+  IITB_FOOD,
+  BUILDINGS_SOURCE_ID,
+  FOOD_SOURCE_ID,
   storeysByName,
   findRoutes,
   inCampusBbox,
@@ -21,6 +27,8 @@ import {
 import { readSharedRoute, routeLink, writeSharedRoute, type SharedRoute } from "@/lib/route-url";
 import { buildingPath, buildingSlug, slugFromPathname } from "@/lib/building-url";
 import { encodeDigipin } from "@/lib/digipin";
+import { foodPopup } from "@/lib/food-popup";
+import { applySheet } from "@/lib/sheet";
 import { MARKER_COLORS, MY_LOCATION_LABEL, findBuildingCentroid, formatRouteInfo, resolvePlace } from "@/lib/places";
 import { haversineMeters } from "../../src/routing";
 
@@ -46,7 +54,19 @@ const buildingGroups = groupBuildings(
   IITB_BUILDINGS.features.flatMap((f) => (f.properties?.name ? [{ name: f.properties.name, building: f.properties.building }] : [])),
 );
 
-const buildingStoreys = storeysByName();
+// map filter chips: the building list's groups, plus food places
+const SHOW_OPTIONS = [...buildingGroups.map(({ id, label }) => ({ id: id as string, label })), { id: "food", label: "Food" }];
+const SHOW_ALL = SHOW_OPTIONS.map((o) => o.id);
+
+const shownGroupsOf = (shown: string[]) => buildingGroups.filter((g) => shown.includes(g.id));
+const PITCH_3D = 55;
+const sheetApplied = applySheet(IITB_BUILDINGS, IITB_FOOD);
+
+function applyShown(map: maplibregl.Map, shown: string[]) {
+  const groups = shownGroupsOf(shown);
+  filterBuildings(map, groups.length === buildingGroups.length ? null : groups.flatMap((g) => g.names));
+  setFoodLabelsVisible(map, shown.includes("food"));
+}
 
 // Opened via a /b/<slug>/ share page: that building is the destination.
 const sharedBuilding = (() => {
@@ -191,9 +211,8 @@ export default function App() {
     const map = mapRef.current;
     if (map && styleReadyRef.current) setCampusTheme(map, dark);
   }, [dark]);
-  const [buildingNamesVisible, setBuildingNamesVisible] = React.useState(true);
-  const [foodVisible, setFoodVisible] = React.useState(true);
-  const [buildings3d, setBuildings3dOn] = React.useState(false);
+  const [shown, setShown] = React.useState(SHOW_ALL);
+  const [buildings3d, setBuildings3dOn] = React.useState(true);
   const [tileUrlDraft, setTileUrlDraft] = React.useState(() =>
     import.meta.env.DEV ? `${window.location.origin}/tiles/{z}/{x}/{y}.pbf` : "",
   );
@@ -321,7 +340,7 @@ export default function App() {
 
   // Bridges into MapLibre's persistent `style.load` listener, which is registered once
   // and would otherwise only ever see the state from the render it was created in.
-  const latest = { fromValue, toValue, routeState, buildingNamesVisible, foodVisible, buildings3d, recomputeRoute, dark };
+  const latest = { fromValue, toValue, routeState, shown, buildings3d, recomputeRoute, dark };
   const latestRef = React.useRef(latest);
   latestRef.current = latest;
 
@@ -341,10 +360,24 @@ export default function App() {
       style,
       center: sharedCentroid ?? CAMPUS_CENTER,
       zoom: sharedCentroid ? 17 : 16,
+      pitch: buildings3d ? PITCH_3D : 0,
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
     });
     mapRef.current = map;
+    // layer listeners outlive setStyle, so register once
+    for (const id of [FOOD_DOT_LAYER_ID, FOOD_LABEL_LAYER_ID]) {
+      map.on("click", id, (e) => {
+        const f = e.features?.[0];
+        if (!f || f.geometry.type !== "Point") return;
+        new maplibregl.Popup({ maxWidth: "240px", focusAfterOpen: false })
+          .setLngLat(f.geometry.coordinates as [number, number])
+          .setDOMContent(foodPopup(f.properties as FoodProps))
+          .addTo(map);
+      });
+      map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
+      map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
+    }
     // narrow screens open compact attribution expanded over the map; collapse it after MapLibre's resize handler
     const collapseAttribution = () => {
       const attrib = map.getContainer().querySelector(".maplibregl-ctrl-attrib.maplibregl-compact");
@@ -379,8 +412,7 @@ export default function App() {
     map.on("style.load", () => {
       styleReadyRef.current = true;
       const current = latestRef.current;
-      setBuildingLabelsVisible(map, current.buildingNamesVisible);
-      setFoodLabelsVisible(map, current.foodVisible);
+      applyShown(map, current.shown);
       setBuildings3d(map, current.buildings3d);
       setCampusTheme(map, current.dark); // the theme may have changed while the style loaded
       if (current.fromValue.trim() && current.toValue.trim() && current.routeState.routes.length === 0) {
@@ -398,6 +430,17 @@ export default function App() {
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // the bundled snapshot stays if the sheet fails
+  const [buildingStoreys, setBuildingStoreys] = React.useState(storeysByName);
+  React.useEffect(() => {
+    sheetApplied.then(() => {
+      for (const [id, data] of [[BUILDINGS_SOURCE_ID, IITB_BUILDINGS], [FOOD_SOURCE_ID, IITB_FOOD]] as const) {
+        (mapRef.current?.getSource(id) as maplibregl.GeoJSONSource | undefined)?.setData(data);
+      }
+      setBuildingStoreys(storeysByName());
+    }, (err) => console.warn("iitbmap: sheet not loaded", err));
   }, []);
 
   // Route layer sync: the single place that draws `routeState` onto the map in response
@@ -620,31 +663,27 @@ export default function App() {
                   </ToggleGroupItem>
                 </ToggleGroup>
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="buildingNames"
-                  checked={buildingNamesVisible}
-                  onCheckedChange={(v) => {
-                    const next = v === true;
-                    setBuildingNamesVisible(next);
+              <div className="flex flex-col gap-1">
+                <Label id="show-label" className="text-xs text-muted-foreground">
+                  Show
+                </Label>
+                <ToggleGroup
+                  type="multiple"
+                  aria-labelledby="show-label"
+                  className="w-full flex-wrap"
+                  value={shown}
+                  onValueChange={(next) => {
+                    setShown(next);
                     const map = mapRef.current;
-                    if (map && styleReadyRef.current) setBuildingLabelsVisible(map, next);
+                    if (map && styleReadyRef.current) applyShown(map, next);
                   }}
-                />
-                <Label htmlFor="buildingNames">Building names</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="foodPlaces"
-                  checked={foodVisible}
-                  onCheckedChange={(v) => {
-                    const next = v === true;
-                    setFoodVisible(next);
-                    const map = mapRef.current;
-                    if (map && styleReadyRef.current) setFoodLabelsVisible(map, next);
-                  }}
-                />
-                <Label htmlFor="foodPlaces">Food places</Label>
+                >
+                  {SHOW_OPTIONS.map((o) => (
+                    <ToggleGroupItem key={o.id} value={o.id} className="flex-1">
+                      {o.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -656,7 +695,7 @@ export default function App() {
                     const map = mapRef.current;
                     if (!map || !styleReadyRef.current) return;
                     setBuildings3d(map, next);
-                    map.easeTo(next ? { pitch: 55 } : { pitch: 0, bearing: 0 });
+                    map.easeTo(next ? { pitch: PITCH_3D } : { pitch: 0, bearing: 0 });
                   }}
                 />
                 <Label htmlFor="buildings3d">3D buildings</Label>
@@ -668,7 +707,7 @@ export default function App() {
           )}
         </CardContent>
       </Card>
-      <BuildingList groups={buildingGroups} storeys={buildingStoreys} selected={toValue.trim()} dark={dark} wideQuery={WIDE_SCREEN} onPick={setToValue} />
+      <BuildingList groups={shownGroupsOf(shown)} storeys={buildingStoreys} selected={toValue.trim()} dark={dark} wideQuery={WIDE_SCREEN} onPick={setToValue} />
       <div id="map" ref={mapContainerRef} />
     </>
   );

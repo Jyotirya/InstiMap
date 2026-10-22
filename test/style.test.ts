@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { BUILDINGS_3D_LAYER_ID, buildings3dLayer, campusLayers, getCampusStyle, mergeCampusLayers, STOREY_M } from "../src/style";
+import { BUILDING_LABEL_FILTER, BUILDING_LABEL_LAYER_ID } from "../src/buildings";
+import { BUILDINGS_3D_LAYER_ID, buildings3dLayer, campusLayers, filterBuildings, getCampusStyle, mergeCampusLayers, STOREY_M } from "../src/style";
 
 describe("campusLayers", () => {
   it("defines one layer per campus source-layer, bottom to top", () => {
@@ -110,5 +111,19 @@ describe("buildings3dLayer", () => {
     expect(layer.paint?.["fill-extrusion-height"]).toEqual(["*", ["get", "levels"], STOREY_M]);
     const ids = getCampusStyle({ tileUrl: "t", glyphsUrl: "g" }).layers.map((l) => l.id);
     expect(ids.indexOf(BUILDINGS_3D_LAYER_ID)).toBeLessThan(ids.indexOf("building-label"));
+  });
+});
+
+describe("filterBuildings", () => {
+  it("narrows the label and 3D layers to the names, and null restores their own filters", () => {
+    const filters = new Map<string, unknown>();
+    const map = { getLayer: () => ({}), setFilter: (id: string, f: unknown) => filters.set(id, f) } as never;
+    filterBuildings(map, ["Hostel 1"]);
+    const only = ["in", ["get", "name"], ["literal", ["Hostel 1"]]];
+    expect(filters.get(BUILDINGS_3D_LAYER_ID)).toEqual(["all", ["has", "levels"], only]);
+    expect(filters.get(BUILDING_LABEL_LAYER_ID)).toEqual(["all", BUILDING_LABEL_FILTER, only]);
+    filterBuildings(map, null);
+    expect(filters.get(BUILDINGS_3D_LAYER_ID)).toEqual(buildings3dLayer().filter);
+    expect(filters.get(BUILDING_LABEL_LAYER_ID)).toEqual(BUILDING_LABEL_FILTER);
   });
 });

@@ -1,16 +1,35 @@
-import type { CircleLayerSpecification, Map as MaplibreMap, SymbolLayerSpecification } from "maplibre-gl";
+import type { CircleLayerSpecification, ExpressionSpecification, Map as MaplibreMap, SymbolLayerSpecification } from "maplibre-gl";
 import type { FeatureCollection, Point } from "geojson";
 import food from "./iitb-food.json";
 import { MAP_BG, MAP_BG_DARK } from "./geo";
 
-/** Named food places on campus, as points, with floor ("1st floor") where known. */
-export const IITB_FOOD = food as FeatureCollection<Point, { name: string; amenity: string; floor?: string }>;
+export interface FoodProps {
+  name: string;
+  amenity: string;
+  floor?: string; // "1st floor"
+  hours?: string; // "09:00-23:00"
+  app?: string; // ordering app, with its store links
+  android?: string;
+  ios?: string;
+}
+
+/** Named food places on campus, as points. */
+export const IITB_FOOD = food as FeatureCollection<Point, FoodProps>;
 
 export const FOOD_SOURCE_ID = "food";
 export const FOOD_DOT_LAYER_ID = "food-dot";
 export const FOOD_LABEL_LAYER_ID = "food-label";
 /** Below this zoom the dots would crowd the campus. */
 export const FOOD_MIN_ZOOM = 15;
+export const FOOD_HOURS_MIN_ZOOM = 17;
+
+// a smaller line under the name, or nothing
+const subline = (prop: string, prefix = ""): ExpressionSpecification =>
+  ["case", ["has", prop], ["concat", "\n", prefix, ["get", prop]], ""];
+const label = (...lines: ExpressionSpecification[]): ExpressionSpecification =>
+  ["format", ["get", "name"], {}, ...lines.flatMap((l) => [l, { "font-scale": 0.82 }])] as unknown as ExpressionSpecification;
+const FLOOR = subline("floor");
+const APP = subline("app", "App: ");
 
 /** Berry: clear of the red destination pin, the yellow main roads and the building fills. */
 export const FOOD_COLORS = {
@@ -42,12 +61,7 @@ export function foodLayers(opts: { dark?: boolean } = {}): [CircleLayerSpecifica
       source: FOOD_SOURCE_ID,
       minzoom: FOOD_MIN_ZOOM + 1,
       layout: {
-        // the floor, where known, as a smaller second line
-        "text-field": [
-          "case", ["has", "floor"],
-          ["format", ["get", "name"], {}, "\n", {}, ["get", "floor"], { "font-scale": 0.82 }],
-          ["get", "name"],
-        ],
+        "text-field": ["step", ["zoom"], label(FLOOR, APP), FOOD_HOURS_MIN_ZOOM, label(FLOOR, subline("hours"), APP)],
         "text-font": ["Inter Regular"],
         "text-size": ["interpolate", ["linear"], ["zoom"], FOOD_MIN_ZOOM + 1, 11, 18, 14],
         "text-max-width": 8,

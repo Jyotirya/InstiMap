@@ -19,6 +19,8 @@ describe("IITB_FOOD", () => {
     expect(floors.length).toBeGreaterThan(0);
     for (const floor of floors) expect(floor).toMatch(/^(Ground floor|Basement|\d+(st|nd|rd|th) floor)$/);
     expect(JSON.stringify(foodLayers()[1].layout?.["text-field"])).toContain('"floor"');
+    expect(JSON.stringify(foodLayers()[1].layout?.["text-field"])).toContain('"hours"');
+    expect(JSON.stringify(foodLayers()[1].layout?.["text-field"])).toContain('"app"');
   });
 
   it("uses names the Latin-only Inter glyphs can draw", () => {

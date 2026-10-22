@@ -9,6 +9,7 @@ export {
   STOREY_M,
   buildings3dLayer,
   setBuildings3d,
+  filterBuildings,
   type CampusStyleOptions,
   type MergeCampusLayersOptions,
 } from "./style";
@@ -31,6 +32,7 @@ export {
   FOOD_DOT_LAYER_ID,
   FOOD_LABEL_LAYER_ID,
   FOOD_COLORS,
+  type FoodProps,
   foodLayers,
   setFoodLabelsVisible,
 } from "./food";
