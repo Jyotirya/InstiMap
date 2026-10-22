@@ -26,5 +26,7 @@ export function foodPopup(p: FoodProps): HTMLElement {
       link(app, href, label);
     });
   }
+  const web = https(p.web);
+  if (web) link(line(""), web, "Order online");
   return root;
 }

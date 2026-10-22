@@ -11,6 +11,7 @@ export interface FoodProps {
   app?: string; // ordering app, with its store links
   android?: string;
   ios?: string;
+  web?: string; // ordering website
 }
 
 /** Named food places on campus, as points. */

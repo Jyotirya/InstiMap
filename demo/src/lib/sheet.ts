@@ -57,6 +57,6 @@ export async function applySheet(buildings: FeatureCollection, food: FeatureColl
     if (!r) continue;
     const hours = hoursLabel(r.hours || r.known_hours || "");
     if (hours) p.hours = hours;
-    for (const k of ["app", "android", "ios"]) if (r[k]) p[k] = r[k];
+    for (const k of ["app", "android", "ios", "web"]) if (r[k]) p[k] = r[k];
   }
 }
