@@ -156,7 +156,8 @@ export const BuildingList = React.memo(function BuildingList({ groups, storeys, 
         >
           {shown.length === 0 && <p className="px-4 py-3 text-sm text-muted-foreground">No matching building.</p>}
           {shown.map((g) => (
-            <details key={g.id} open className="group">
+            // groups start collapsed; a search opens them so hits show
+            <details key={g.id} open={query.trim() !== ""} className="group">
               <summary className="sticky top-0 z-[1] flex min-h-11 cursor-pointer list-none items-center gap-2 bg-card px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none sm:min-h-9 pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden">
                 <ChevronRight className="size-3.5 transition-transform group-open:rotate-90 motion-reduce:transition-none" />
                 <span className="size-2.5 rounded-[3px]" style={{ background: colors[g.id] }} aria-hidden />
