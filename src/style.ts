@@ -45,7 +45,7 @@ export const SPORTS_DETAIL_MIN_ZOOM = 15.5;
 export const ROAD_WIDTH_MIN_ZOOM = 16;
 
 export const ATTRIBUTION =
-  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors | Built by <a href="https://github.com/saketkc/iitbmap" target="_blank" rel="noopener">Saket Choudhary</a> (<a href="https://github.com/saketkc/iitbmap" target="_blank" rel="noopener">iitbmap</a>)';
 
 /** Campus layer colors; also used by link previews. */
 export const PALETTE = {
