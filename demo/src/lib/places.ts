@@ -3,7 +3,7 @@ import { IITB_BUILDINGS, IITB_FOOD, FOOD_NAMES, buildingCentroid, inCampusBbox, 
 import { decodeDigipin } from "./digipin";
 
 export const MY_LOCATION_LABEL = "My current location";
-export const SITE_TITLE = "IIT Bombay Campus Map";
+export const SITE_TITLE = "InstiMap";
 /** Start/destination markers and the selected route line, in the app and in link previews. */
 export const MARKER_COLORS = { start: "#16a34a", end: "#dc2626", route: "#2563eb" } as const;
 

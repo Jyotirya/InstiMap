@@ -29,8 +29,8 @@ const BUILT_UP = builtUpByName();
 
 /** Every named building, by group. */
 export const BuildingList = React.memo(function BuildingList({ groups, storeys, selected, dark, wideQuery, onPick }: BuildingListProps) {
-  const [wide, setWide] = React.useState(() => window.matchMedia(wideQuery).matches);
-  const [open, setOpen] = React.useState(false);
+  const [wide, setWide] = React.useState(() => typeof window !== "undefined" && window.matchMedia(wideQuery).matches);
+  const [open, setOpen] = React.useState(() => typeof window !== "undefined" && window.matchMedia(wideQuery).matches);
   const closeRef = React.useRef<HTMLButtonElement>(null);
   const openRef = React.useRef<HTMLButtonElement>(null);
   const wasOpen = React.useRef(false);
@@ -83,12 +83,7 @@ export const BuildingList = React.memo(function BuildingList({ groups, storeys, 
       <Button
         ref={openRef}
         variant="outline"
-        className="absolute z-10 h-11 rounded-full bg-card px-4 shadow-lg sm:h-9 sm:rounded-md pointer-coarse:h-11"
-        style={
-          wide
-            ? { top: "max(12px, env(safe-area-inset-top))", right: "max(12px, env(safe-area-inset-right))" }
-            : { bottom: "calc(max(12px, env(safe-area-inset-bottom)) + 8px)", left: "max(12px, env(safe-area-inset-left))" }
-        }
+        className="pointer-events-auto self-end h-11 rounded-full bg-card px-4 shadow-lg sm:h-9 sm:rounded-md pointer-coarse:h-11"
         aria-expanded={false}
         aria-controls="building-list"
         onClick={() => setOpen(true)}
@@ -101,24 +96,14 @@ export const BuildingList = React.memo(function BuildingList({ groups, storeys, 
 
   return (
     <>
-      {!wide && <div className="fixed inset-0 z-20 bg-black/30" aria-hidden onClick={close} />}
+      {!wide && <div className="fixed inset-0 z-20 bg-black/30 pointer-events-auto" aria-hidden onClick={close} />}
       <section
         id="building-list"
         aria-label="All buildings"
         className={cn(
-          "z-20 flex flex-col overflow-hidden border bg-card text-card-foreground shadow-lg",
-          wide ? "absolute w-[300px] rounded-xl" : "fixed inset-x-0 bottom-0 h-[72dvh] rounded-t-2xl border-b-0",
+          "pointer-events-auto flex flex-col overflow-hidden border bg-card text-card-foreground shadow-lg",
+          wide ? "z-10 min-h-0 flex-1 w-full rounded-xl" : "fixed inset-x-0 bottom-0 z-20 h-[72dvh] rounded-t-2xl border-b-0",
         )}
-        style={
-          wide
-            ? {
-                top: "max(12px, env(safe-area-inset-top))",
-                right: "max(12px, env(safe-area-inset-right))",
-                // leaves the bottom-right locate and attribution controls clear
-                maxHeight: "calc(100dvh - max(12px, env(safe-area-inset-top)) - 120px)",
-              }
-            : undefined
-        }
       >
         {!wide && <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border" aria-hidden />}
         <header className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2">

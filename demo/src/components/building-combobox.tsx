@@ -86,6 +86,7 @@ export function BuildingCombobox({ id, value, onValueChange, buildingNames, plac
         />
       </PopoverAnchor>
       <PopoverContent
+        align="end"
         className="w-[--radix-popover-trigger-width] p-0"
         onOpenAutoFocus={(e) => e.preventDefault()}
         onInteractOutside={(e) => {

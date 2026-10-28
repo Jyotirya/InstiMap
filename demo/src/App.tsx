@@ -368,12 +368,13 @@ export default function App() {
     const wide = window.matchMedia(WIDE_SCREEN).matches;
     const panel = panelRef.current?.getBoundingClientRect();
     // the panel sits beside the map when wide, over its top otherwise
-    const panelRight = wide ? (panel?.right ?? 0) : 0;
     const panelBottom = wide ? 0 : (panel?.bottom ?? 0);
+    const rightInset = wide && panel ? window.innerWidth - panel.left : 0;
     const listLeft = wide ? document.getElementById("building-list")?.getBoundingClientRect().left : undefined;
     const listWidth = listLeft === undefined ? 0 : window.innerWidth - listLeft;
+    const totalRightPad = Math.max(rightInset, listWidth);
     map.fitBounds(bounds, {
-      padding: { top: panelBottom + FIT_PADDING, right: listWidth + FIT_PADDING, bottom: FIT_PADDING, left: panelRight + FIT_PADDING },
+      padding: { top: panelBottom + FIT_PADDING, right: totalRightPad + FIT_PADDING, bottom: FIT_PADDING, left: FIT_PADDING },
     });
   };
 
@@ -631,20 +632,27 @@ export default function App() {
 
   return (
     <>
-      <Card
-        ref={panelRef}
-        className="absolute z-10 w-[min(320px,calc(100vw-24px))] gap-0 overflow-y-auto p-3 shadow-lg"
+      <div
+        className="pointer-events-none absolute z-10 flex flex-col gap-2"
         style={{
           top: "max(12px, env(safe-area-inset-top))",
-          left: "max(12px, env(safe-area-inset-left))",
+          right: "max(12px, env(safe-area-inset-right))",
+          width: "min(320px, calc(100vw - 24px))",
           maxHeight: "calc(100vh - max(24px, env(safe-area-inset-top) + env(safe-area-inset-bottom) + 24px))",
         }}
       >
+        <Card
+          ref={panelRef}
+          className="pointer-events-auto shrink-0 gap-0 overflow-y-auto p-3 shadow-lg"
+          style={{
+            maxHeight: "min(400px, 50vh)",
+          }}
+        >
         <CardContent className="flex flex-col gap-3 p-0">
           <div className="flex items-center gap-2">
             {/* blue on transparent; the white backing keeps it legible in dark mode */}
             <img src={`${import.meta.env.BASE_URL}iitb-logo.svg`} alt="IIT Bombay logo" className="size-9 shrink-0 rounded-md bg-white p-0.5" />
-            <span className="text-sm font-semibold leading-tight">IIT Bombay Campus Map</span>
+            <span className="text-sm font-semibold leading-tight">InstiMap</span>
           </div>
           {directions && (
             <div className="flex items-center gap-2">
@@ -894,7 +902,8 @@ export default function App() {
         </CardContent>
       </Card>
       <BuildingList groups={listGroups} storeys={buildingStoreys} selected={toValue.trim()} dark={dark} wideQuery={WIDE_SCREEN} onPick={setToValue} />
-      <div id="map" ref={mapContainerRef} />
-    </>
+    </div>
+    <div id="map" ref={mapContainerRef} />
+  </>
   );
 }

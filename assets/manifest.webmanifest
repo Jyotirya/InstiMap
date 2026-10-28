@@ -1,8 +1,8 @@
 {
   "id": ".",
-  "name": "IIT Bombay Campus Map",
-  "short_name": "IITB Map",
-  "description": "IIT Bombay campus map and walking/driving directions",
+  "name": "InstiMap",
+  "short_name": "InstiMap",
+  "description": "InstiMap - IIT Bombay campus map and walking/driving directions",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
