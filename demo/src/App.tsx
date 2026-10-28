@@ -1,6 +1,6 @@
 import * as React from "react";
 import maplibregl from "maplibre-gl";
-import { Download, Info, MapPin, Navigation, Settings, Share2, Utensils, X } from "lucide-react";
+import { Download, MapPin, Navigation, Settings, Share2, Utensils, X } from "lucide-react";
 
 import {
   getCampusStyle,
@@ -121,9 +121,9 @@ function readThemePref(): ThemePref {
     const v = localStorage.getItem(THEME_KEY);
     if (v === "light" || v === "dark") return v;
   } catch {
-    // storage blocked: fall back to the system theme
+    // storage blocked: fall back to light
   }
-  return "system";
+  return "light";
 }
 
 function writeThemePref(pref: ThemePref): void {
@@ -649,22 +649,10 @@ export default function App() {
           }}
         >
         <CardContent className="flex flex-col gap-3 p-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {/* blue on transparent; the white backing keeps it legible in dark mode */}
-              <img src={`${import.meta.env.BASE_URL}iitb-logo.svg`} alt="IIT Bombay logo" className="size-9 shrink-0 rounded-md bg-white p-0.5" />
-              <span className="text-sm font-semibold leading-tight">InstiMap</span>
-            </div>
-            <a
-              href="https://github.com/saketkc/iitbmap"
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Built by Saket Choudhary (saketkc/iitbmap)"
-              aria-label="About this map - Built by Saket Choudhary"
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <Info className="size-4" />
-            </a>
+          <div className="flex items-center gap-2">
+            {/* blue on transparent; the white backing keeps it legible in dark mode */}
+            <img src={`${import.meta.env.BASE_URL}iitb-logo.svg`} alt="IIT Bombay logo" className="size-9 shrink-0 rounded-md bg-white p-0.5" />
+            <span className="text-sm font-semibold leading-tight">InstiMap</span>
           </div>
           {directions && (
             <div className="flex items-center gap-2">
@@ -909,31 +897,6 @@ export default function App() {
                   <Button onClick={applyStyleOverrides}>Apply</Button>
                 </>
               )}
-              <Separator />
-              <div className="flex flex-col gap-1 text-[11px] text-muted-foreground pt-1">
-                <p>
-                  Built by{" "}
-                  <a
-                    href="https://github.com/saketkc/iitbmap"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline hover:text-foreground font-medium"
-                  >
-                    Saket Choudhary
-                  </a>
-                </p>
-                <p>
-                  Repository:{" "}
-                  <a
-                    href="https://github.com/saketkc/iitbmap"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline hover:text-foreground font-medium"
-                  >
-                    saketkc/iitbmap
-                  </a>
-                </p>
-              </div>
             </>
           )}
         </CardContent>
